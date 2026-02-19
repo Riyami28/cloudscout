@@ -1,71 +1,61 @@
 import { NextResponse } from 'next/server';
 import { v4 as uuidv4 } from 'uuid';
 
-const GOOGLE_CSE_API_URL = 'https://www.googleapis.com/customsearch/v1';
+const SERPER_API_URL = 'https://google.serper.dev/search';
 
-// Categorized queries for broader coverage
 const FEED_CATEGORIES = {
   finops_community: {
     label: 'FinOps & Cloud Cost Community',
     queries: [
-      'FinOps cloud cost optimization 2025 2026',
+      'FinOps cloud cost optimization',
       'FinOps Foundation cloud financial management',
       '"cloud cost" community best practices',
     ],
-    dateRestrict: 'd7',
   },
   competitors: {
     label: 'Competitor Updates',
     queries: [
-      'Vantage OR CloudHealth OR Kubecost OR "Spot.io" cloud cost tool update',
-      'Infracost OR CloudZero OR Apptio OR Flexera cloud cost new feature',
-      'CAST AI OR Harness cloud cost optimization announcement',
+      'Vantage OR CloudHealth OR Kubecost cloud cost tool',
+      'Infracost OR CloudZero OR Apptio cloud cost',
+      'CAST AI OR Harness cloud cost optimization',
     ],
-    dateRestrict: 'd7',
   },
   cloud_provider_updates: {
     label: 'Cloud Provider News',
     queries: [
-      'AWS new feature pricing billing update 2025 2026',
-      'Azure new service cost pricing update 2025 2026',
-      'Google Cloud GCP new feature pricing 2025 2026',
-      'Oracle Cloud OCI new feature pricing 2025 2026',
+      'AWS new feature pricing billing update',
+      'Azure new service cost pricing update',
+      'Google Cloud GCP new feature pricing',
+      'Oracle Cloud OCI new feature pricing',
     ],
-    dateRestrict: 'd7',
   },
   cloud_billing_pain: {
     label: 'Cloud Billing Pain',
     queries: [
-      '"cloud bill" OR "cloud cost" problem OR too high OR shocked OR surprised',
-      '"AWS bill" OR "Azure cost" OR "GCP billing" unexpected OR high OR optimize',
-      'cloud spend reduce OR optimize OR FinOps OR waste',
+      '"cloud bill" OR "cloud cost" problem too high',
+      '"AWS bill" OR "Azure cost" unexpected high optimize',
+      'cloud spend reduce optimize FinOps waste',
     ],
-    dateRestrict: 'd7',
   },
   linkedin_posts: {
     label: 'LinkedIn Discussions',
     queries: [
       'site:linkedin.com FinOps OR "cloud cost" OR "cloud billing"',
-      'site:linkedin.com "cloud spend" OR "cloud optimization" OR "cloud waste"',
+      'site:linkedin.com "cloud spend" OR "cloud optimization"',
     ],
-    dateRestrict: 'd14',
   },
 };
 
-interface GoogleCSEResult {
+interface SerperResult {
   title: string;
   link: string;
   snippet: string;
-  displayLink?: string;
-  pagemap?: {
-    metatags?: Array<{ [key: string]: string }>;
-    cse_image?: Array<{ src: string }>;
-  };
+  date?: string;
 }
 
-interface GoogleCSEResponse {
-  searchInformation: { totalResults: string };
-  items?: GoogleCSEResult[];
+interface SerperResponse {
+  organic?: SerperResult[];
+  searchParameters?: { q: string };
 }
 
 export interface TrendingPost {
@@ -78,17 +68,15 @@ export interface TrendingPost {
   source: string;
   author?: string;
   publishedDate?: string;
-  imageUrl?: string;
 }
 
 export async function GET() {
   try {
-    const apiKey = process.env.GOOGLE_CSE_API_KEY;
-    const cseId = process.env.GOOGLE_CSE_ID;
+    const apiKey = process.env.SERPER_API_KEY;
 
-    if (!apiKey || !cseId) {
+    if (!apiKey) {
       return NextResponse.json(
-        { error: 'Google CSE API key and CSE ID are required. Set GOOGLE_CSE_API_KEY and GOOGLE_CSE_ID in .env.local' },
+        { error: 'Serper API key is required. Set SERPER_API_KEY in .env.local (get free key at serper.dev)' },
         { status: 500 }
       );
     }
@@ -96,44 +84,43 @@ export async function GET() {
     const allPosts: TrendingPost[] = [];
     const seenUrls = new Set<string>();
 
-    // We have limited API calls (100/day free tier), so pick 1 query per category
-    // That's 5 API calls per page load, cached for 30 min
-    const selectedQueries: { category: string; label: string; query: string; dateRestrict: string }[] = [];
+    // Pick 1 random query per category = 5 API calls, cached 30 min
+    const selectedQueries: { category: string; label: string; query: string }[] = [];
 
     for (const [categoryKey, category] of Object.entries(FEED_CATEGORIES)) {
-      // Pick a random query from each category to get variety across page loads
       const randomIndex = Math.floor(Math.random() * category.queries.length);
       selectedQueries.push({
         category: categoryKey,
         label: category.label,
         query: category.queries[randomIndex],
-        dateRestrict: category.dateRestrict,
       });
     }
 
     // Fetch all categories in parallel
-    const fetchPromises = selectedQueries.map(async ({ category, label, query, dateRestrict }) => {
-      const params = new URLSearchParams({
-        key: apiKey,
-        cx: cseId,
-        q: query,
-        num: '5',
-        dateRestrict,
-        sort: 'date',
-      });
-
+    const fetchPromises = selectedQueries.map(async ({ category, label, query }) => {
       try {
-        const response = await fetch(`${GOOGLE_CSE_API_URL}?${params.toString()}`);
+        const response = await fetch(SERPER_API_URL, {
+          method: 'POST',
+          headers: {
+            'X-API-KEY': apiKey,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            q: query,
+            num: 5,
+            tbs: 'qdr:w', // last week
+          }),
+        });
+
         if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
-          console.error(`CSE error for "${category}":`, response.status, errorData);
+          console.error(`Serper error for "${category}":`, response.status);
           return [];
         }
 
-        const data: GoogleCSEResponse = await response.json();
-        if (!data.items) return [];
+        const data: SerperResponse = await response.json();
+        if (!data.organic) return [];
 
-        return data.items
+        return data.organic
           .filter((item) => {
             if (seenUrls.has(item.link)) return false;
             seenUrls.add(item.link);
@@ -142,17 +129,16 @@ export async function GET() {
           .map((item): TrendingPost => {
             let author: string | undefined;
 
-            // Try to extract author from LinkedIn URLs
             const linkedinMatch = item.link.match(/linkedin\.com\/(?:posts|pulse|in)\/([^_/]+)/);
             if (linkedinMatch) {
               author = linkedinMatch[1].replace(/-/g, ' ');
             }
 
-            // Try metatags for author
-            if (!author && item.pagemap?.metatags?.[0]) {
-              author = item.pagemap.metatags[0]['author'] ||
-                item.pagemap.metatags[0]['og:site_name'] ||
-                item.pagemap.metatags[0]['twitter:creator'];
+            let source: string;
+            try {
+              source = new URL(item.link).hostname.replace('www.', '');
+            } catch {
+              source = 'web';
             }
 
             return {
@@ -162,10 +148,9 @@ export async function GET() {
               title: item.title,
               snippet: item.snippet,
               url: item.link,
-              source: item.displayLink || new URL(item.link).hostname,
+              source,
               author,
-              publishedDate: item.pagemap?.metatags?.[0]?.['article:published_time'],
-              imageUrl: item.pagemap?.cse_image?.[0]?.src,
+              publishedDate: item.date,
             };
           });
       } catch (err) {
@@ -177,7 +162,7 @@ export async function GET() {
     const results = await Promise.all(fetchPromises);
     results.forEach((posts) => allPosts.push(...posts));
 
-    // Group by category for the frontend
+    // Group by category
     const grouped: Record<string, { label: string; posts: TrendingPost[] }> = {};
     for (const post of allPosts) {
       if (!grouped[post.category]) {

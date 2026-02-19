@@ -1,21 +1,17 @@
 import { LinkedInPost } from '@/types';
 
-const GOOGLE_CSE_API_URL = 'https://www.googleapis.com/customsearch/v1';
+const SERPER_API_URL = 'https://google.serper.dev/search';
 
-interface GoogleCSEResult {
+interface SerperResult {
   title: string;
   link: string;
   snippet: string;
-  pagemap?: {
-    metatags?: Array<{ [key: string]: string }>;
-  };
+  date?: string;
 }
 
-interface GoogleCSEResponse {
-  searchInformation: {
-    totalResults: string;
-  };
-  items?: GoogleCSEResult[];
+interface SerperResponse {
+  organic?: SerperResult[];
+  searchParameters?: { q: string; totalResults?: number };
 }
 
 function buildSearchQuery(keywords: string[], roles: string[]): string {
@@ -32,20 +28,20 @@ function buildSearchQuery(keywords: string[], roles: string[]): string {
   return [siteFilter, keywordPart, rolePart].filter(Boolean).join(' ');
 }
 
-function getDateRestrict(dateRange: string): string | undefined {
+function getTimeFilter(dateRange: string): string | undefined {
   switch (dateRange) {
     case '7d':
-      return 'd7';
+      return 'qdr:w';
     case '30d':
-      return 'm1';
+      return 'qdr:m';
     case '90d':
-      return 'm3';
+      return 'qdr:m3';
     default:
       return undefined;
   }
 }
 
-function parseResult(item: GoogleCSEResult): LinkedInPost {
+function parseResult(item: SerperResult): LinkedInPost {
   let author: string | undefined;
   const urlMatch = item.link.match(/linkedin\.com\/(?:posts|pulse|in)\/([^_/]+)/);
   if (urlMatch) {
@@ -57,7 +53,7 @@ function parseResult(item: GoogleCSEResult): LinkedInPost {
     title: item.title,
     snippet: item.snippet,
     author,
-    publishedDate: item.pagemap?.metatags?.[0]?.['article:published_time'],
+    publishedDate: item.date,
   };
 }
 
@@ -67,40 +63,43 @@ export async function searchLinkedInPosts(
   dateRange: string = 'all',
   page: number = 1
 ): Promise<{ posts: LinkedInPost[]; totalResults: number }> {
-  const apiKey = process.env.GOOGLE_CSE_API_KEY;
-  const cseId = process.env.GOOGLE_CSE_ID;
+  const apiKey = process.env.SERPER_API_KEY;
 
-  if (!apiKey || !cseId) {
-    throw new Error('Google CSE API key and CSE ID are required. Set GOOGLE_CSE_API_KEY and GOOGLE_CSE_ID in .env.local');
+  if (!apiKey) {
+    throw new Error('Serper API key is required. Set SERPER_API_KEY in .env.local (get free key at serper.dev)');
   }
 
   const query = buildSearchQuery(keywords, roles);
-  const startIndex = (page - 1) * 10 + 1;
+  const tbs = getTimeFilter(dateRange);
 
-  const params = new URLSearchParams({
-    key: apiKey,
-    cx: cseId,
+  const body: Record<string, unknown> = {
     q: query,
-    start: startIndex.toString(),
-    num: '10',
-  });
+    num: 10,
+    page,
+  };
 
-  const dateRestrict = getDateRestrict(dateRange);
-  if (dateRestrict) {
-    params.set('dateRestrict', dateRestrict);
+  if (tbs) {
+    body.tbs = tbs;
   }
 
-  const response = await fetch(`${GOOGLE_CSE_API_URL}?${params.toString()}`);
+  const response = await fetch(SERPER_API_URL, {
+    method: 'POST',
+    headers: {
+      'X-API-KEY': apiKey,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
 
   if (!response.ok) {
     const error = await response.text();
-    throw new Error(`Google CSE API error: ${response.status} - ${error}`);
+    throw new Error(`Serper API error: ${response.status} - ${error}`);
   }
 
-  const data: GoogleCSEResponse = await response.json();
+  const data: SerperResponse = await response.json();
 
   return {
-    posts: (data.items || []).map(parseResult),
-    totalResults: parseInt(data.searchInformation.totalResults, 10) || 0,
+    posts: (data.organic || []).map(parseResult),
+    totalResults: data.organic?.length || 0,
   };
 }
