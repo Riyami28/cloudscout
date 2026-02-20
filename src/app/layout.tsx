@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "CloudScout - Cloud Intelligence by Zopdev",
+  title: "CloudScout - Cloud Intelligence by Riya",
   description: "Scout cloud cost signals across LinkedIn, FinOps communities, and competitor updates. Powered by AI for ZopNight & ZopDay.",
 };
 

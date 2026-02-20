@@ -15,7 +15,7 @@ export default function Header() {
             <h1 className="text-lg font-bold bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent dark:from-emerald-400 dark:to-teal-400">
               CloudScout
             </h1>
-            <p className="text-[10px] font-medium text-slate-400 dark:text-slate-500 tracking-wider uppercase">by Zopdev</p>
+            <p className="text-[10px] font-medium text-slate-400 dark:text-slate-500 tracking-wider uppercase">by Riya</p>
           </div>
         </Link>
 
