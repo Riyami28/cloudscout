@@ -23,6 +23,7 @@ interface TrendingPost {
   author?: string;
   publishedDate?: string;
   imageUrl?: string;
+  isLinkedIn?: boolean;
 }
 
 interface GroupedFeed {
@@ -32,13 +33,48 @@ interface GroupedFeed {
   };
 }
 
+const LINKEDIN_ICON = (
+  <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 8a6 6 0 016 6v7h-4v-7a2 2 0 00-2-2 2 2 0 00-2 2v7h-4v-7a6 6 0 016-6zM2 9h4v12H2z" />
+    <circle cx="4" cy="4" r="2" stroke="currentColor" strokeWidth={2} />
+  </svg>
+);
+
 const CATEGORY_STYLES: Record<string, { gradient: string; icon: ReactNode; badgeColor: string }> = {
-  finops_community: {
+  linkedin_cloud_billing: {
+    gradient: 'from-orange-500 to-red-600',
+    badgeColor: 'bg-orange-50 text-orange-700 dark:bg-orange-950/50 dark:text-orange-400',
+    icon: (
+      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+    ),
+  },
+  linkedin_finops: {
     gradient: 'from-emerald-500 to-teal-600',
     badgeColor: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400',
     icon: (
       <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+      </svg>
+    ),
+  },
+  linkedin_cloud_engineering: {
+    gradient: 'from-blue-500 to-cyan-600',
+    badgeColor: 'bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-400',
+    icon: (
+      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+      </svg>
+    ),
+  },
+  linkedin_decision_makers: {
+    gradient: 'from-amber-500 to-orange-600',
+    badgeColor: 'bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-400',
+    icon: (
+      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
       </svg>
     ),
   },
@@ -47,45 +83,27 @@ const CATEGORY_STYLES: Record<string, { gradient: string; icon: ReactNode; badge
     badgeColor: 'bg-violet-50 text-violet-700 dark:bg-violet-950/50 dark:text-violet-400',
     icon: (
       <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
       </svg>
     ),
   },
   cloud_provider_updates: {
-    gradient: 'from-blue-500 to-cyan-600',
-    badgeColor: 'bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-400',
+    gradient: 'from-sky-500 to-indigo-600',
+    badgeColor: 'bg-sky-50 text-sky-700 dark:bg-sky-950/50 dark:text-sky-400',
     icon: (
       <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" />
       </svg>
     ),
   },
-  cloud_billing_pain: {
-    gradient: 'from-orange-500 to-red-600',
-    badgeColor: 'bg-orange-50 text-orange-700 dark:bg-orange-950/50 dark:text-orange-400',
-    icon: (
-      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7C14 5 16.09 5.777 17.656 7.343A7.975 7.975 0 0120 13a7.975 7.975 0 01-2.343 5.657z" />
-      </svg>
-    ),
-  },
-  linkedin_posts: {
-    gradient: 'from-sky-500 to-indigo-600',
-    badgeColor: 'bg-sky-50 text-sky-700 dark:bg-sky-950/50 dark:text-sky-400',
-    icon: (
-      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 8a6 6 0 016 6v7h-4v-7a2 2 0 00-2-2 2 2 0 00-2 2v7h-4v-7a6 6 0 016-6zM2 9h4v12H2z" />
-        <circle cx="4" cy="4" r="2" stroke="currentColor" strokeWidth={2} />
-      </svg>
-    ),
-  },
 };
 
-// Display order for categories
+// Display order for categories — LinkedIn first
 const CATEGORY_ORDER = [
-  'cloud_billing_pain',
-  'linkedin_posts',
-  'finops_community',
+  'linkedin_cloud_billing',
+  'linkedin_finops',
+  'linkedin_cloud_engineering',
+  'linkedin_decision_makers',
   'competitors',
   'cloud_provider_updates',
 ];
@@ -336,8 +354,8 @@ export default function HomePage() {
               </svg>
             </div>
             <div>
-              <h3 className="text-base font-bold text-slate-900 dark:text-white">Cloud Intelligence Feed</h3>
-              <p className="text-sm text-slate-500 dark:text-slate-400">Latest posts from FinOps communities, competitors, cloud providers & more</p>
+              <h3 className="text-base font-bold text-slate-900 dark:text-white">LinkedIn Cloud Intelligence Feed</h3>
+              <p className="text-sm text-slate-500 dark:text-slate-400">LinkedIn posts about cloud billing, FinOps, engineering & decision makers</p>
             </div>
           </div>
           <div className="flex items-center gap-2 rounded-full bg-orange-50 px-3 py-1.5 dark:bg-orange-950/50">
@@ -399,42 +417,83 @@ export default function HomePage() {
           <div className="space-y-3">
             {visiblePosts.map((post) => {
               const style = CATEGORY_STYLES[post.category];
+              const isLinkedIn = post.isLinkedIn || post.url.includes('linkedin.com');
               return (
-                <a
+                <div
                   key={post.id}
-                  href={post.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="group flex items-start gap-4 rounded-xl border border-slate-100 bg-slate-50/50 p-4 transition-all duration-200 hover:border-slate-200 hover:bg-white hover:shadow-md hover:-translate-y-0.5 dark:border-slate-800 dark:bg-slate-800/30 dark:hover:border-slate-700 dark:hover:bg-slate-800/60"
+                  className="group rounded-xl border border-slate-100 bg-slate-50/50 p-4 transition-all duration-200 hover:border-slate-200 hover:bg-white hover:shadow-md dark:border-slate-800 dark:bg-slate-800/30 dark:hover:border-slate-700 dark:hover:bg-slate-800/60"
                 >
-                  <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${style?.gradient || 'from-slate-400 to-slate-500'} text-white shadow-sm`}>
-                    {style?.icon || (
-                      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                    )}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 mb-1 flex-wrap">
-                      <p className="text-sm font-semibold text-slate-900 dark:text-white line-clamp-1">
-                        {post.title}
-                      </p>
-                      <svg className="h-3.5 w-3.5 shrink-0 text-blue-500 opacity-0 transition-opacity group-hover:opacity-100" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                      </svg>
-                    </div>
-                    <p className="text-sm text-slate-600 line-clamp-2 dark:text-slate-300">{post.snippet}</p>
-                    <div className="mt-2 flex items-center gap-2 flex-wrap">
-                      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${style?.badgeColor || 'bg-slate-100 text-slate-600'}`}>
-                        {post.categoryLabel}
-                      </span>
-                      <span className="text-[10px] text-slate-400">{post.source}</span>
-                      {post.author && (
-                        <span className="text-[10px] text-slate-400">by {post.author}</span>
+                  <div className="flex items-start gap-4">
+                    <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${style?.gradient || 'from-slate-400 to-slate-500'} text-white shadow-sm`}>
+                      {style?.icon || (
+                        <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
                       )}
                     </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 mb-1 flex-wrap">
+                        {isLinkedIn && (
+                          <span className="inline-flex items-center gap-1 rounded bg-blue-600 px-1.5 py-0.5 text-[10px] font-bold text-white">
+                            in
+                          </span>
+                        )}
+                        <p className="text-sm font-semibold text-slate-900 dark:text-white line-clamp-1">
+                          {post.title}
+                        </p>
+                      </div>
+                      <p className="text-sm text-slate-600 line-clamp-2 dark:text-slate-300">{post.snippet}</p>
+                      <div className="mt-2 flex items-center gap-2 flex-wrap">
+                        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${style?.badgeColor || 'bg-slate-100 text-slate-600'}`}>
+                          {post.categoryLabel}
+                        </span>
+                        <span className="text-[10px] text-slate-400">{post.source}</span>
+                        {post.author && (
+                          <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400">by {post.author}</span>
+                        )}
+                      </div>
+
+                      {/* Action Buttons */}
+                      <div className="mt-3 flex items-center gap-2 flex-wrap">
+                        <a
+                          href={post.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-blue-600 to-blue-700 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-all hover:shadow-md hover:-translate-y-0.5"
+                        >
+                          {isLinkedIn ? (
+                            <>
+                              {LINKEDIN_ICON ? (
+                                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                </svg>
+                              ) : null}
+                              View on LinkedIn
+                            </>
+                          ) : (
+                            <>
+                              <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                              </svg>
+                              Open Post
+                            </>
+                          )}
+                        </a>
+                        {isLinkedIn && post.author && (
+                          <button
+                            onClick={() => handleSearch(`@${post.author!.replace(/\s+/g, '-')}`)}
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition-all hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700 hover:shadow-sm dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:border-emerald-600 dark:hover:bg-emerald-950/30"
+                          >
+                            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                            </svg>
+                            View Profile Posts
+                          </button>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                </a>
+                </div>
               );
             })}
           </div>
