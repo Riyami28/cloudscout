@@ -9,6 +9,8 @@ import StatCard from '@/components/ui/StatCard';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
 import ErrorBanner from '@/components/ui/ErrorBanner';
 import { getRecentSearches, getSavedLeads } from '@/lib/storage';
+import { classifySearchInput } from '@/lib/search-classifier';
+import { SearchType } from '@/types';
 
 interface TrendingPost {
   id: string;
@@ -122,12 +124,29 @@ export default function HomePage() {
     fetchFeed();
   }, []);
 
-  const handleSearch = (query: string) => {
-    const params = new URLSearchParams({
-      q: query,
-      roles: selectedRoles.join(','),
-      dateRange,
-    });
+  const handleSearch = (query: string, searchType?: SearchType) => {
+    // If searchType not provided (e.g. from recent searches / presets), classify it
+    const classification = searchType ? { type: searchType } : classifySearchInput(query);
+    const actualType = classification.type;
+
+    const params = new URLSearchParams({ dateRange });
+
+    if (actualType === 'company') {
+      // Strip "company:" prefix if present
+      const companyName = query.toLowerCase().startsWith('company:')
+        ? query.slice(8).trim()
+        : query;
+      params.set('q', companyName);
+      params.set('searchType', 'company');
+    } else if (actualType === 'profile') {
+      params.set('q', query);
+      params.set('searchType', 'profile');
+    } else {
+      params.set('q', query);
+      params.set('searchType', 'keyword');
+      params.set('roles', selectedRoles.join(','));
+    }
+
     router.push(`/results?${params.toString()}`);
   };
 

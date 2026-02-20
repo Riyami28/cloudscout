@@ -41,6 +41,48 @@ export const KEYWORD_PRESETS = [
   { label: 'Multi-Cloud Costs', query: 'multi-cloud cost OR hybrid cloud billing' },
 ];
 
+export const CATEGORIZED_PRESETS = [
+  {
+    label: 'Cloud Billing',
+    icon: 'billing',
+    presets: [
+      { label: 'Cloud Bill Too High', query: 'cloud bill problem OR cloud cost too high' },
+      { label: 'AWS Billing Issues', query: 'AWS bill too high OR AWS cost optimization' },
+      { label: 'Azure Cost Problems', query: 'Azure cost too high OR Azure billing issues' },
+      { label: 'GCP Billing', query: 'GCP billing OR Google Cloud cost optimization' },
+    ],
+  },
+  {
+    label: 'FinOps',
+    icon: 'finops',
+    presets: [
+      { label: 'FinOps Challenges', query: 'FinOps challenges OR cloud financial management' },
+      { label: 'Cost Optimization', query: 'cloud cost optimization OR reduce cloud spend' },
+      { label: 'Cloud Waste', query: 'cloud waste OR unused cloud resources OR idle instances' },
+      { label: 'Right-Sizing', query: 'right-sizing cloud OR cloud resource optimization' },
+    ],
+  },
+  {
+    label: 'By Company',
+    icon: 'company',
+    presets: [
+      { label: 'Netflix Cloud', query: 'company:Netflix' },
+      { label: 'Airbnb Cloud', query: 'company:Airbnb' },
+      { label: 'Uber Cloud', query: 'company:Uber' },
+      { label: 'Stripe Cloud', query: 'company:Stripe' },
+    ],
+  },
+  {
+    label: 'Multi-Cloud',
+    icon: 'multicloud',
+    presets: [
+      { label: 'Multi-Cloud Costs', query: 'multi-cloud cost OR hybrid cloud billing' },
+      { label: 'Cloud Migration', query: 'cloud migration cost OR cloud migration billing' },
+      { label: 'OCI vs AWS', query: 'Oracle Cloud OCI vs AWS cost comparison' },
+    ],
+  },
+];
+
 export const TARGET_ROLES = [
   'CTO',
   'CEO',

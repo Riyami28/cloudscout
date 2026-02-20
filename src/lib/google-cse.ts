@@ -2,84 +2,36 @@ import { LinkedInPost } from '@/types';
 
 const SERPER_API_URL = 'https://google.serper.dev/search';
 
-interface SerperResult {
+export interface SerperResult {
   title: string;
   link: string;
   snippet: string;
   date?: string;
 }
 
-interface SerperResponse {
+export interface SerperResponse {
   organic?: SerperResult[];
   searchParameters?: { q: string; totalResults?: number };
 }
 
-function buildSearchQuery(keywords: string[], roles: string[]): string {
-  const siteFilter = 'site:linkedin.com/posts OR site:linkedin.com/pulse';
-
-  const keywordPart =
-    keywords.length > 0
-      ? `(${keywords.map((k) => `"${k}"`).join(' OR ')})`
-      : '"cloud cost" OR "cloud bill"';
-
-  const rolePart =
-    roles.length > 0 ? `(${roles.map((r) => `"${r}"`).join(' OR ')})` : '';
-
-  return [siteFilter, keywordPart, rolePart].filter(Boolean).join(' ');
-}
-
-function getTimeFilter(dateRange: string): string | undefined {
-  switch (dateRange) {
-    case '7d':
-      return 'qdr:w';
-    case '30d':
-      return 'qdr:m';
-    case '90d':
-      return 'qdr:m3';
-    default:
-      return undefined;
-  }
-}
-
-function parseResult(item: SerperResult): LinkedInPost {
-  let author: string | undefined;
-  const urlMatch = item.link.match(/linkedin\.com\/(?:posts|pulse|in)\/([^_/]+)/);
-  if (urlMatch) {
-    author = urlMatch[1].replace(/-/g, ' ');
-  }
-
-  return {
-    url: item.link,
-    title: item.title,
-    snippet: item.snippet,
-    author,
-    publishedDate: item.date,
-  };
-}
-
-export async function searchLinkedInPosts(
-  keywords: string[],
-  roles: string[],
-  dateRange: string = 'all',
-  page: number = 1
-): Promise<{ posts: LinkedInPost[]; totalResults: number }> {
+// Shared Serper fetch utility - reused by search and profile APIs
+export async function querySerper(
+  query: string,
+  options: { num?: number; page?: number; tbs?: string } = {}
+): Promise<SerperResponse> {
   const apiKey = process.env.SERPER_API_KEY;
-
   if (!apiKey) {
     throw new Error('Serper API key is required. Set SERPER_API_KEY in .env.local (get free key at serper.dev)');
   }
 
-  const query = buildSearchQuery(keywords, roles);
-  const tbs = getTimeFilter(dateRange);
-
   const body: Record<string, unknown> = {
     q: query,
-    num: 10,
-    page,
+    num: options.num || 10,
+    page: options.page || 1,
   };
 
-  if (tbs) {
-    body.tbs = tbs;
+  if (options.tbs) {
+    body.tbs = options.tbs;
   }
 
   const response = await fetch(SERPER_API_URL, {
@@ -96,7 +48,62 @@ export async function searchLinkedInPosts(
     throw new Error(`Serper API error: ${response.status} - ${error}`);
   }
 
-  const data: SerperResponse = await response.json();
+  return response.json();
+}
+
+export function getTimeFilter(dateRange: string): string | undefined {
+  switch (dateRange) {
+    case '7d':
+      return 'qdr:w';
+    case '30d':
+      return 'qdr:m';
+    case '90d':
+      return 'qdr:m3';
+    default:
+      return undefined;
+  }
+}
+
+export function parseResult(item: SerperResult): LinkedInPost {
+  let author: string | undefined;
+  const urlMatch = item.link.match(/linkedin\.com\/(?:posts|pulse|in)\/([^_/]+)/);
+  if (urlMatch) {
+    author = urlMatch[1].replace(/-/g, ' ');
+  }
+
+  return {
+    url: item.link,
+    title: item.title,
+    snippet: item.snippet,
+    author,
+    publishedDate: item.date,
+  };
+}
+
+function buildSearchQuery(keywords: string[], roles: string[]): string {
+  const siteFilter = 'site:linkedin.com/posts OR site:linkedin.com/pulse';
+
+  const keywordPart =
+    keywords.length > 0
+      ? `(${keywords.map((k) => `"${k}"`).join(' OR ')})`
+      : '"cloud cost" OR "cloud bill"';
+
+  const rolePart =
+    roles.length > 0 ? `(${roles.map((r) => `"${r}"`).join(' OR ')})` : '';
+
+  return [siteFilter, keywordPart, rolePart].filter(Boolean).join(' ');
+}
+
+export async function searchLinkedInPosts(
+  keywords: string[],
+  roles: string[],
+  dateRange: string = 'all',
+  page: number = 1
+): Promise<{ posts: LinkedInPost[]; totalResults: number }> {
+  const query = buildSearchQuery(keywords, roles);
+  const tbs = getTimeFilter(dateRange);
+
+  const data = await querySerper(query, { num: 10, page, tbs });
 
   return {
     posts: (data.organic || []).map(parseResult),
