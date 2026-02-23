@@ -233,6 +233,7 @@ export default function HomePage() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
             </svg>
           }
+          onClick={() => router.push('/saved')}
         />
         <StatCard
           label="Feed Posts"
@@ -243,14 +244,17 @@ export default function HomePage() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" />
             </svg>
           }
+          onClick={() => {
+            document.getElementById('feed-section')?.scrollIntoView({ behavior: 'smooth' });
+          }}
         />
         <StatCard
-          label="API Quota"
-          value="100/day"
+          label="Recent Searches"
+          value={recentSearches.length}
           gradient="from-amber-500 to-orange-600"
           icon={
             <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
           }
         />
@@ -345,7 +349,7 @@ export default function HomePage() {
       )}
 
       {/* Live Feed - Categorized */}
-      <div className="rounded-2xl border border-slate-200/60 bg-white/80 p-6 shadow-sm backdrop-blur-sm dark:border-slate-800/60 dark:bg-slate-900/50">
+      <div id="feed-section" className="rounded-2xl border border-slate-200/60 bg-white/80 p-6 shadow-sm backdrop-blur-sm dark:border-slate-800/60 dark:bg-slate-900/50">
         <div className="flex items-center justify-between mb-5">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-orange-500 to-red-600 text-white shadow-lg">
@@ -479,9 +483,12 @@ export default function HomePage() {
                             </>
                           )}
                         </a>
-                        {isLinkedIn && post.author && (
+                        {isLinkedIn && post.author && post.author.trim() && (
                           <button
-                            onClick={() => handleSearch(`@${post.author!.replace(/\s+/g, '-')}`)}
+                            onClick={() => {
+                              const authorSlug = post.author!.trim().toLowerCase().replace(/\s+/g, '-');
+                              handleSearch(`profile:${authorSlug}`);
+                            }}
                             className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition-all hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700 hover:shadow-sm dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:border-emerald-600 dark:hover:bg-emerald-950/30"
                           >
                             <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">

@@ -43,7 +43,7 @@ export default function SearchForm({ onSearch, initialQuery = '', loading = fals
           onChange={(e) => setQuery(e.target.value)}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
-          placeholder="Search keywords, @username, or paste a LinkedIn URL..."
+          placeholder="Search keywords, @username, profile:username, or paste a LinkedIn URL..."
           className="w-full rounded-2xl border border-slate-200 bg-white py-4 pl-14 pr-36 text-slate-900 placeholder-slate-400 focus:border-emerald-400 focus:outline-none dark:border-slate-700 dark:bg-slate-800/50 dark:text-white dark:placeholder-slate-500 dark:focus:border-emerald-500"
           disabled={loading}
         />

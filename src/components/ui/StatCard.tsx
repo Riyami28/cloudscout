@@ -3,14 +3,19 @@ export default function StatCard({
   value,
   icon,
   gradient = 'from-emerald-500 to-teal-600',
+  onClick,
 }: {
   label: string;
   value: string | number;
   icon?: React.ReactNode;
   gradient?: string;
+  onClick?: () => void;
 }) {
   return (
-    <div className="group relative overflow-hidden rounded-2xl border border-slate-200/60 bg-white p-5 shadow-sm transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5 dark:border-slate-800/60 dark:bg-slate-900/50">
+    <div
+      onClick={onClick}
+      className={`group relative overflow-hidden rounded-2xl border border-slate-200/60 bg-white p-5 shadow-sm transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5 dark:border-slate-800/60 dark:bg-slate-900/50 ${onClick ? 'cursor-pointer' : ''}`}
+    >
       <div className={`absolute -right-4 -top-4 h-24 w-24 rounded-full bg-gradient-to-br ${gradient} opacity-10 blur-xl transition-all duration-300 group-hover:opacity-20`} />
       <div className="relative flex items-center gap-4">
         {icon && (

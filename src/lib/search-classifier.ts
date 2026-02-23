@@ -46,6 +46,18 @@ export function classifySearchInput(input: string): SearchClassification {
     }
   }
 
+  // 2b. Profile prefix detection (profile:johndoe)
+  if (trimmed.toLowerCase().startsWith('profile:')) {
+    const username = trimmed.slice(8).trim().replace(/^@/, '');
+    if (username) {
+      return {
+        type: 'profile',
+        originalInput: trimmed,
+        username,
+      };
+    }
+  }
+
   // 3. Username detection - starts with @
   if (trimmed.startsWith('@')) {
     const username = trimmed.slice(1).trim();
@@ -58,11 +70,11 @@ export function classifySearchInput(input: string): SearchClassification {
     }
   }
 
-  // 4. Username detection - single slug word (no spaces, not a common keyword)
+  // 4. Username detection - single slug word (no spaces, 3+ chars, not a common keyword)
   if (
     !trimmed.includes(' ') &&
     USERNAME_SLUG_REGEX.test(trimmed) &&
-    trimmed.includes('-') &&
+    trimmed.length >= 3 &&
     !COMMON_KEYWORDS.has(trimmed.toLowerCase())
   ) {
     return {

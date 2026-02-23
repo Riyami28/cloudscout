@@ -6,8 +6,9 @@ import LeadList from '@/components/leads/LeadList';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
 import ErrorBanner from '@/components/ui/ErrorBanner';
 import EmptyState from '@/components/ui/EmptyState';
+import BulkActionBar from '@/components/leads/BulkActionBar';
 import { Lead, ProfileInfo, SearchType } from '@/types';
-import { addRecentSearch } from '@/lib/storage';
+import { addRecentSearch, saveLead, exportLeadsToCSV } from '@/lib/storage';
 import { classifySearchInput } from '@/lib/search-classifier';
 
 function ProfileHeader({ profileInfo }: { profileInfo: ProfileInfo }) {
@@ -77,6 +78,37 @@ function ResultsContent() {
   const [totalResults, setTotalResults] = useState(0);
   const [searched, setSearched] = useState(false);
   const [profileInfo, setProfileInfo] = useState<ProfileInfo | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  const toggleSelect = useCallback((leadId: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(leadId)) {
+        next.delete(leadId);
+      } else {
+        next.add(leadId);
+      }
+      return next;
+    });
+  }, []);
+
+  const toggleSelectAll = useCallback(() => {
+    setSelectedIds((prev) => {
+      if (prev.size === leads.length) {
+        return new Set();
+      }
+      return new Set(leads.map((l) => l.id));
+    });
+  }, [leads]);
+
+  const clearSelection = useCallback(() => {
+    setSelectedIds(new Set());
+  }, []);
+
+  // Clear selection when leads change
+  useEffect(() => {
+    setSelectedIds(new Set());
+  }, [leads]);
 
   const query = searchParams.get('q') || '';
   const roles = searchParams.get('roles')?.split(',').filter(Boolean) || [];
@@ -245,6 +277,52 @@ function ResultsContent() {
     router.push(`/lead/${lead.id}`);
   };
 
+  const saveSelectedLeads = useCallback(() => {
+    const selected = leads.filter((l) => selectedIds.has(l.id));
+    selected.forEach((lead) => saveLead(lead));
+    clearSelection();
+  }, [leads, selectedIds, clearSelection]);
+
+  const exportSelectedLeads = useCallback(() => {
+    const selected = leads.filter((l) => selectedIds.has(l.id));
+    const csv = exportLeadsToCSV(selected);
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `cloudscout-leads-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [leads, selectedIds]);
+
+  const analyzeSelectedLeads = useCallback(async () => {
+    const selected = leads.filter((l) => selectedIds.has(l.id));
+    if (selected.length === 0) return;
+    setAnalyzing(true);
+    setError(null);
+    try {
+      const batch = selected.slice(0, 10);
+      const res = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ leads: batch }),
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      setLeads((prev) => {
+        const analyzed = data.leads || [];
+        return prev.map((lead) => {
+          const match = analyzed.find((a: Lead) => a.id === lead.id);
+          return match || lead;
+        });
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Analysis failed');
+    } finally {
+      setAnalyzing(false);
+    }
+  }, [leads, selectedIds]);
+
   const hasUnscored = leads.some((l) => !l.score);
 
   // Get display name for the search
@@ -338,10 +416,21 @@ function ResultsContent() {
       ) : analyzing ? (
         <div>
           <LoadingSpinner message="AI is scoring leads for ZopNight & ZopDay relevance..." />
-          <LeadList leads={leads} onViewDetail={handleViewDetail} />
+          <LeadList leads={leads} onViewDetail={handleViewDetail} selectedIds={selectedIds} onToggleSelect={toggleSelect} onToggleSelectAll={toggleSelectAll} />
         </div>
       ) : leads.length > 0 ? (
-        <LeadList leads={leads} onViewDetail={handleViewDetail} />
+        <>
+          <BulkActionBar
+            selectedCount={selectedIds.size}
+            totalCount={leads.length}
+            onSaveSelected={saveSelectedLeads}
+            onExportSelected={exportSelectedLeads}
+            onAnalyzeSelected={analyzeSelectedLeads}
+            onClearSelection={clearSelection}
+            analyzing={analyzing}
+          />
+          <LeadList leads={leads} onViewDetail={handleViewDetail} selectedIds={selectedIds} onToggleSelect={toggleSelect} onToggleSelectAll={toggleSelectAll} />
+        </>
       ) : searched ? (
         <EmptyState
           title="No leads found"

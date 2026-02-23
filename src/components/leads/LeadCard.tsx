@@ -8,18 +8,34 @@ import SaveLeadButton from './SaveLeadButton';
 interface LeadCardProps {
   lead: Lead;
   onViewDetail?: (lead: Lead) => void;
+  isSelected?: boolean;
+  onToggleSelect?: (leadId: string) => void;
 }
 
-export default function LeadCard({ lead, onViewDetail }: LeadCardProps) {
+export default function LeadCard({ lead, onViewDetail, isSelected, onToggleSelect }: LeadCardProps) {
   const { post, profile, score } = lead;
 
   return (
-    <div className="group relative overflow-hidden rounded-2xl border border-slate-200/60 bg-white p-5 transition-all duration-300 hover:shadow-xl hover:shadow-emerald-500/5 hover:-translate-y-0.5 dark:border-slate-800/60 dark:bg-slate-900/50 dark:hover:shadow-emerald-500/10">
+    <div className={`group relative overflow-hidden rounded-2xl border p-5 transition-all duration-300 hover:shadow-xl hover:shadow-emerald-500/5 hover:-translate-y-0.5 dark:hover:shadow-emerald-500/10 ${
+      isSelected
+        ? 'border-emerald-400 bg-emerald-50/50 dark:border-emerald-600 dark:bg-emerald-950/20'
+        : 'border-slate-200/60 bg-white dark:border-slate-800/60 dark:bg-slate-900/50'
+    }`}>
       <div className="absolute right-0 top-0 h-32 w-32 bg-gradient-to-bl from-emerald-500/5 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
 
       <div className="relative flex items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-3 mb-3">
+            {onToggleSelect && (
+              <input
+                type="checkbox"
+                checked={isSelected || false}
+                onChange={() => onToggleSelect(lead.id)}
+                className="h-4 w-4 shrink-0 rounded border-slate-300 text-emerald-600 accent-emerald-600 cursor-pointer dark:border-slate-600"
+                onClick={(e) => e.stopPropagation()}
+              />
+            )}
+
             <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-slate-100 to-slate-200 text-slate-600 font-bold text-sm dark:from-slate-700 dark:to-slate-800 dark:text-slate-300">
               {profile?.profileImageUrl ? (
                 <img src={profile.profileImageUrl} alt={profile.name} className="h-11 w-11 rounded-full object-cover" />
