@@ -1,22 +1,41 @@
 import { LinkedInPost } from '@/types';
 
-const TAVILY_API_URL = 'https://api.tavily.com/search';
+const SERPER_API_URL = 'https://google.serper.dev/search';
 
-export interface TavilyResult {
-  title: string;
-  url: string;
-  content: string;
-  score: number;
-  published_date?: string;
+// ===== IN-MEMORY CACHE (30 min TTL) =====
+// Same query from any user serves cached results — saves API calls
+interface CacheEntry {
+  data: SerperResponse;
+  timestamp: number;
 }
 
-export interface TavilyResponse {
-  results: TavilyResult[];
-  query: string;
-  response_time: number;
+const searchCache = new Map<string, CacheEntry>();
+const CACHE_TTL = 30 * 60 * 1000; // 30 minutes
+
+function getCacheKey(query: string, num: number, tbs?: string): string {
+  return `${query}|${num}|${tbs || ''}`;
 }
 
-// Keep old interfaces for backward compatibility with trending route
+function getFromCache(key: string): SerperResponse | null {
+  const entry = searchCache.get(key);
+  if (!entry) return null;
+  if (Date.now() - entry.timestamp > CACHE_TTL) {
+    searchCache.delete(key);
+    return null;
+  }
+  return entry.data;
+}
+
+function setCache(key: string, data: SerperResponse): void {
+  // Prevent cache from growing unbounded — max 200 entries
+  if (searchCache.size > 200) {
+    const oldest = searchCache.keys().next().value;
+    if (oldest) searchCache.delete(oldest);
+  }
+  searchCache.set(key, { data, timestamp: Date.now() });
+}
+
+// ===== INTERFACES =====
 export interface SerperResult {
   title: string;
   link: string;
@@ -29,33 +48,47 @@ export interface SerperResponse {
   searchParameters?: { q: string; totalResults?: number };
 }
 
-// Core Tavily search utility — replaces Serper
-async function queryTavily(
+// ===== CORE SERPER SEARCH =====
+export async function querySerper(
   query: string,
-  options: { maxResults?: number; days?: number } = {}
-): Promise<TavilyResponse> {
-  const apiKey = process.env.TAVILY_API_KEY;
+  options: { num?: number; page?: number; tbs?: string } = {}
+): Promise<SerperResponse> {
+  const apiKey = process.env.SERPER_API_KEY;
   if (!apiKey) {
     throw new Error(
-      'Tavily API key is required. Set TAVILY_API_KEY in .env.local (get free key at tavily.com)'
+      'Serper API key is required. Set SERPER_API_KEY in .env.local (get key at serper.dev)'
     );
   }
 
-  const body: Record<string, unknown> = {
-    api_key: apiKey,
-    query,
-    max_results: options.maxResults || 10,
-    include_raw_content: false,
-    search_depth: 'basic',
-  };
+  const num = options.num || 10;
+  const cacheKey = getCacheKey(query, num, options.tbs);
 
-  if (options.days) {
-    body.days = options.days;
+  // Check cache first
+  const cached = getFromCache(cacheKey);
+  if (cached) {
+    console.log(`[Cache HIT] ${query.slice(0, 50)}...`);
+    return cached;
   }
 
-  const response = await fetch(TAVILY_API_URL, {
+  console.log(`[Cache MISS] ${query.slice(0, 50)}... → calling Serper`);
+
+  const body: Record<string, unknown> = {
+    q: query,
+    num,
+  };
+
+  if (options.page && options.page > 1) {
+    body.page = options.page;
+  }
+
+  if (options.tbs) {
+    body.tbs = `qdr:${options.tbs}`;
+  }
+
+  const response = await fetch(SERPER_API_URL, {
     method: 'POST',
     headers: {
+      'X-API-KEY': apiKey,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify(body),
@@ -63,67 +96,32 @@ async function queryTavily(
 
   if (!response.ok) {
     const error = await response.text();
-    throw new Error(`Tavily API error: ${response.status} - ${error}`);
+    throw new Error(`Serper API error: ${response.status} - ${error}`);
   }
 
-  return response.json();
+  const data: SerperResponse = await response.json();
+
+  // Cache the result
+  setCache(cacheKey, data);
+
+  return data;
 }
 
-// Convert date range to days for Tavily
-function getDaysFromDateRange(dateRange: string): number | undefined {
-  switch (dateRange) {
-    case '7d':
-      return 7;
-    case '30d':
-      return 30;
-    case '90d':
-      return 90;
-    default:
-      return undefined;
-  }
-}
-
-// Keep getTimeFilter exported (used by search-profile route) — now maps to days
+// ===== TIME FILTER =====
 export function getTimeFilter(dateRange: string): string | undefined {
   switch (dateRange) {
     case '7d':
-      return '7';
+      return 'd7'; // Serper uses qdr:d7 format
     case '30d':
-      return '30';
+      return 'm';  // qdr:m = past month
     case '90d':
-      return '90';
+      return 'm3'; // qdr:m3 = past 3 months
     default:
       return undefined;
   }
 }
 
-// Shared query function — same signature as old querySerper so other routes still work
-// Returns data in the old SerperResponse shape for backward compatibility
-export async function querySerper(
-  query: string,
-  options: { num?: number; page?: number; tbs?: string } = {}
-): Promise<SerperResponse> {
-  const days = options.tbs ? parseInt(options.tbs, 10) || undefined : undefined;
-
-  const data = await queryTavily(query, {
-    maxResults: options.num || 10,
-    days,
-  });
-
-  // Map Tavily results to SerperResult shape
-  const organic: SerperResult[] = data.results.map((r) => ({
-    title: r.title,
-    link: r.url,
-    snippet: r.content,
-    date: r.published_date,
-  }));
-
-  return {
-    organic,
-    searchParameters: { q: query, totalResults: organic.length },
-  };
-}
-
+// ===== PARSE RESULT =====
 export function parseResult(item: SerperResult): LinkedInPost {
   let author: string | undefined;
   const urlMatch = item.link.match(
@@ -142,6 +140,7 @@ export function parseResult(item: SerperResult): LinkedInPost {
   };
 }
 
+// ===== SEARCH LINKEDIN POSTS =====
 function buildSearchQuery(keywords: string[], roles: string[]): string {
   const siteFilter = 'site:linkedin.com/posts OR site:linkedin.com/pulse';
 
@@ -163,29 +162,13 @@ export async function searchLinkedInPosts(
   page: number = 1
 ): Promise<{ posts: LinkedInPost[]; totalResults: number }> {
   const query = buildSearchQuery(keywords, roles);
-  const days = getDaysFromDateRange(dateRange);
+  const tbs = getTimeFilter(dateRange);
 
-  const data = await queryTavily(query, { maxResults: 10, days });
+  const data = await querySerper(query, { num: 10, tbs, page });
 
-  const posts = data.results
-    .filter((r) => r.url.includes('linkedin.com'))
-    .map((r) => {
-      let author: string | undefined;
-      const urlMatch = r.url.match(
-        /linkedin\.com\/(?:posts|pulse|in)\/([^_/]+)/
-      );
-      if (urlMatch) {
-        author = urlMatch[1].replace(/-/g, ' ');
-      }
-
-      return {
-        url: r.url,
-        title: r.title,
-        snippet: r.content,
-        author,
-        publishedDate: r.published_date,
-      } as LinkedInPost;
-    });
+  const posts = (data.organic || [])
+    .filter((r) => r.link.includes('linkedin.com'))
+    .map((r) => parseResult(r));
 
   return {
     posts,

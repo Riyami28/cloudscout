@@ -1,9 +1,9 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { v4 as uuidv4 } from 'uuid';
+import { querySerper } from '@/lib/google-cse';
 
-const TAVILY_API_URL = 'https://api.tavily.com/search';
-
-const FEED_CATEGORIES = {
+// All available categories
+const FEED_CATEGORIES: Record<string, { label: string; queries: string[]; num: number }> = {
   linkedin_cloud_billing: {
     label: 'LinkedIn: Cloud Billing',
     queries: [
@@ -58,19 +58,8 @@ const FEED_CATEGORIES = {
   },
 };
 
-interface TavilyResult {
-  title: string;
-  url: string;
-  content: string;
-  score: number;
-  published_date?: string;
-}
-
-interface TavilyResponse {
-  results: TavilyResult[];
-  query: string;
-  response_time: number;
-}
+// Default 3 categories for initial load — rest lazy loaded
+const DEFAULT_CATEGORIES = ['linkedin_cloud_billing', 'linkedin_finops', 'linkedin_decision_makers'];
 
 export interface TrendingPost {
   id: string;
@@ -85,75 +74,60 @@ export interface TrendingPost {
   isLinkedIn: boolean;
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const apiKey = process.env.TAVILY_API_KEY;
+    // Support ?categories=all or ?categories=cat1,cat2 for lazy loading
+    const { searchParams } = new URL(request.url);
+    const categoriesParam = searchParams.get('categories');
 
-    if (!apiKey) {
-      return NextResponse.json(
-        { error: 'Tavily API key is required. Set TAVILY_API_KEY in .env.local (get free key at tavily.com)' },
-        { status: 500 }
-      );
+    let categoryKeys: string[];
+    if (categoriesParam === 'all') {
+      categoryKeys = Object.keys(FEED_CATEGORIES);
+    } else if (categoriesParam) {
+      categoryKeys = categoriesParam.split(',').filter((k) => k in FEED_CATEGORIES);
+    } else {
+      // Default: only load 3 categories (saves 50% API calls)
+      categoryKeys = DEFAULT_CATEGORIES;
     }
 
     const allPosts: TrendingPost[] = [];
     const seenUrls = new Set<string>();
 
-    // Pick 1 random query per category
-    const selectedQueries: { category: string; label: string; query: string; num: number }[] = [];
-
-    for (const [categoryKey, category] of Object.entries(FEED_CATEGORIES)) {
+    // Pick 1 random query per selected category
+    const selectedQueries = categoryKeys.map((categoryKey) => {
+      const category = FEED_CATEGORIES[categoryKey];
       const randomIndex = Math.floor(Math.random() * category.queries.length);
-      selectedQueries.push({
+      return {
         category: categoryKey,
         label: category.label,
         query: category.queries[randomIndex],
         num: category.num,
-      });
-    }
+      };
+    });
 
-    // Fetch all categories in parallel using Tavily
+    // Fetch all categories in parallel using cached querySerper
     const fetchPromises = selectedQueries.map(async ({ category, label, query, num }) => {
       try {
-        const response = await fetch(TAVILY_API_URL, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            api_key: apiKey,
-            query,
-            max_results: num,
-            include_raw_content: false,
-            search_depth: 'basic',
-            days: 30, // last month for broader results
-          }),
-        });
+        // querySerper has built-in 30-min cache — same query won't hit API again
+        const data = await querySerper(query, { num, tbs: 'm' }); // past month
 
-        if (!response.ok) {
-          console.error(`Tavily error for "${category}":`, response.status);
-          return [];
-        }
+        if (!data.organic) return [];
 
-        const data: TavilyResponse = await response.json();
-        if (!data.results) return [];
-
-        return data.results
+        return data.organic
           .filter((item) => {
-            if (seenUrls.has(item.url)) return false;
-            seenUrls.add(item.url);
+            if (seenUrls.has(item.link)) return false;
+            seenUrls.add(item.link);
             return true;
           })
           .map((item): TrendingPost => {
             let author: string | undefined;
-            const isLinkedIn = item.url.includes('linkedin.com');
+            const isLinkedIn = item.link.includes('linkedin.com');
 
-            const linkedinMatch = item.url.match(/linkedin\.com\/(?:posts|pulse|in)\/([^_/]+)/);
+            const linkedinMatch = item.link.match(/linkedin\.com\/(?:posts|pulse|in)\/([^_/]+)/);
             if (linkedinMatch) {
               author = linkedinMatch[1].replace(/-/g, ' ');
             }
 
-            // Try to extract author from LinkedIn title format
             if (isLinkedIn && !author) {
               const titleMatch = item.title.match(/^(.+?)(?:\s+on\s+LinkedIn|\s+-\s+)/);
               if (titleMatch) {
@@ -163,7 +137,7 @@ export async function GET() {
 
             let source: string;
             try {
-              source = new URL(item.url).hostname.replace('www.', '');
+              source = new URL(item.link).hostname.replace('www.', '');
             } catch {
               source = 'web';
             }
@@ -173,11 +147,11 @@ export async function GET() {
               category,
               categoryLabel: label,
               title: item.title,
-              snippet: item.content,
-              url: item.url,
+              snippet: item.snippet,
+              url: item.link,
               source,
               author,
-              publishedDate: item.published_date,
+              publishedDate: item.date,
               isLinkedIn,
             };
           });
@@ -199,10 +173,18 @@ export async function GET() {
       grouped[post.category].posts.push(post);
     }
 
+    // Also return available categories for lazy-load UI
+    const availableCategories = Object.entries(FEED_CATEGORIES).map(([key, val]) => ({
+      key,
+      label: val.label,
+      loaded: categoryKeys.includes(key),
+    }));
+
     return NextResponse.json(
       {
         grouped,
         total: allPosts.length,
+        availableCategories,
         fetchedAt: new Date().toISOString(),
       },
       {
