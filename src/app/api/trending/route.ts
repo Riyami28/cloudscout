@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { v4 as uuidv4 } from 'uuid';
 
-const SERPER_API_URL = 'https://google.serper.dev/search';
+const TAVILY_API_URL = 'https://api.tavily.com/search';
 
 const FEED_CATEGORIES = {
   linkedin_cloud_billing: {
@@ -58,16 +58,18 @@ const FEED_CATEGORIES = {
   },
 };
 
-interface SerperResult {
+interface TavilyResult {
   title: string;
-  link: string;
-  snippet: string;
-  date?: string;
+  url: string;
+  content: string;
+  score: number;
+  published_date?: string;
 }
 
-interface SerperResponse {
-  organic?: SerperResult[];
-  searchParameters?: { q: string };
+interface TavilyResponse {
+  results: TavilyResult[];
+  query: string;
+  response_time: number;
 }
 
 export interface TrendingPost {
@@ -85,11 +87,11 @@ export interface TrendingPost {
 
 export async function GET() {
   try {
-    const apiKey = process.env.SERPER_API_KEY;
+    const apiKey = process.env.TAVILY_API_KEY;
 
     if (!apiKey) {
       return NextResponse.json(
-        { error: 'Serper API key is required. Set SERPER_API_KEY in .env.local (get free key at serper.dev)' },
+        { error: 'Tavily API key is required. Set TAVILY_API_KEY in .env.local (get free key at tavily.com)' },
         { status: 500 }
       );
     }
@@ -110,46 +112,48 @@ export async function GET() {
       });
     }
 
-    // Fetch all categories in parallel
+    // Fetch all categories in parallel using Tavily
     const fetchPromises = selectedQueries.map(async ({ category, label, query, num }) => {
       try {
-        const response = await fetch(SERPER_API_URL, {
+        const response = await fetch(TAVILY_API_URL, {
           method: 'POST',
           headers: {
-            'X-API-KEY': apiKey,
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            q: query,
-            num,
-            tbs: 'qdr:m', // last month for broader results
+            api_key: apiKey,
+            query,
+            max_results: num,
+            include_raw_content: false,
+            search_depth: 'basic',
+            days: 30, // last month for broader results
           }),
         });
 
         if (!response.ok) {
-          console.error(`Serper error for "${category}":`, response.status);
+          console.error(`Tavily error for "${category}":`, response.status);
           return [];
         }
 
-        const data: SerperResponse = await response.json();
-        if (!data.organic) return [];
+        const data: TavilyResponse = await response.json();
+        if (!data.results) return [];
 
-        return data.organic
+        return data.results
           .filter((item) => {
-            if (seenUrls.has(item.link)) return false;
-            seenUrls.add(item.link);
+            if (seenUrls.has(item.url)) return false;
+            seenUrls.add(item.url);
             return true;
           })
           .map((item): TrendingPost => {
             let author: string | undefined;
-            const isLinkedIn = item.link.includes('linkedin.com');
+            const isLinkedIn = item.url.includes('linkedin.com');
 
-            const linkedinMatch = item.link.match(/linkedin\.com\/(?:posts|pulse|in)\/([^_/]+)/);
+            const linkedinMatch = item.url.match(/linkedin\.com\/(?:posts|pulse|in)\/([^_/]+)/);
             if (linkedinMatch) {
               author = linkedinMatch[1].replace(/-/g, ' ');
             }
 
-            // Try to extract author from LinkedIn title format: "Name on LinkedIn: ..." or "Name - Title | LinkedIn"
+            // Try to extract author from LinkedIn title format
             if (isLinkedIn && !author) {
               const titleMatch = item.title.match(/^(.+?)(?:\s+on\s+LinkedIn|\s+-\s+)/);
               if (titleMatch) {
@@ -159,7 +163,7 @@ export async function GET() {
 
             let source: string;
             try {
-              source = new URL(item.link).hostname.replace('www.', '');
+              source = new URL(item.url).hostname.replace('www.', '');
             } catch {
               source = 'web';
             }
@@ -169,11 +173,11 @@ export async function GET() {
               category,
               categoryLabel: label,
               title: item.title,
-              snippet: item.snippet,
-              url: item.link,
+              snippet: item.content,
+              url: item.url,
               source,
               author,
-              publishedDate: item.date,
+              publishedDate: item.published_date,
               isLinkedIn,
             };
           });
